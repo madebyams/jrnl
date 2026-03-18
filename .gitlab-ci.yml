@@ -6,13 +6,18 @@
 #   to produce a .app bundle. Because only Linux/Windows runners are
 #   available here, CI does the next best thing:
 #
-#   • build:linux  — compiles a Linux binary inside a Docker container.
-#                    Catches C++ and HTML-embed errors on every push.
-#   • release      — on a vX.Y.Z tag: publishes the Linux binary as a
-#                    GitLab Release artifact.
+#   • build:linux   — Ubuntu 22.04 Docker container, WebKit2GTK
+#   • build:windows — native Windows shell runner (tag: win)
+#                     requires Visual Studio Build Tools + WebView2 SDK
+#
+#   Both jobs validate that the code compiles on their platform.
+#   The release stage publishes both binaries on a vX.Y.Z tag push.
 #
 #   macOS .app builds must be done locally (see README — "Building").
-#   The resulting jrnl.app can be uploaded manually to the release page.
+#
+# Runner tags
+#   amd64 — Linux shell/Docker runner
+#   win   — Windows shell runner
 ########################################################################
 
 default:
@@ -26,7 +31,7 @@ stages:
 variables:
   CONAN_HOME: "$CI_PROJECT_DIR/.conan2"
 
-# ── Build (Linux, every push) ──────────────────────────────────────────
+# ── Linux build ────────────────────────────────────────────────────────
 build:linux:
   stage: build
   image: ubuntu:22.04
@@ -44,10 +49,10 @@ build:linux:
     - pip3 install --quiet conan
     - conan profile detect --force
   script:
-    # CMakeLists.txt runs `conan install` itself and then FATAL_ERRORs on
-    # the first pass (by design) so the generated toolchain can be included
-    # on the second pass.
-    - cmake -B build -DCMAKE_BUILD_TYPE=Release -G Ninja || true
+    # Export the local webview recipe, then pre-generate the Conan toolchain
+    # so CMake does not need a two-pass configure.
+    - conan export recipes/webview --version 0.12.0
+    - conan install . --output-folder=build --build=missing -s build_type=Release
     - cmake -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
     - cmake --build build --target jrnl --parallel
   artifacts:
@@ -56,27 +61,71 @@ build:linux:
       - build/jrnl
     expire_in: 1 week
 
-# ── Release (Linux binary, tag pushes only) ────────────────────────────
+# ── Windows build ──────────────────────────────────────────────────────
+# Prerequisites on the runner:
+#   - Visual Studio Build Tools (MSVC) with C++ workload
+#   - WebView2 SDK  (install via: winget install Microsoft.WebView2SDK)
+#   - CMake, Python 3, pip  (all on PATH)
+build:windows:
+  stage: build
+  tags:
+    - win
+  cache:
+    key: "conan-win-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .conan2/
+  before_script:
+    - pip install --quiet conan
+    - conan profile detect --force
+  script:
+    # Export recipe + pre-generate toolchain (same two-step as Linux)
+    - conan export recipes/webview --version 0.12.0
+    - conan install . --output-folder=build-win --build=missing -s build_type=Release
+    - cmake -B build-win -DCMAKE_BUILD_TYPE=Release
+    - cmake --build build-win --target jrnl --config Release
+    # Normalise exe location: VS generator puts it in Release/, Ninja at root.
+    # Copy to a fixed path so the release job can find it reliably.
+    - |
+      $exe = Get-ChildItem -Recurse -Filter jrnl.exe build-win | Select-Object -First 1
+      Copy-Item $exe.FullName build-win\jrnl.exe -Force
+  artifacts:
+    name: "jrnl-windows-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - build-win/jrnl.exe
+    expire_in: 1 week
+
+# ── Release (tag pushes only) ──────────────────────────────────────────
 release:
   stage: release
   image: ubuntu:22.04
-  needs: [build:linux]
+  needs:
+    - job: build:linux
+      artifacts: true
+    - job: build:windows
+      artifacts: true
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
   before_script:
     - apt-get update -qq && apt-get install -y --no-install-recommends curl zip
   script:
-    # Package the Linux binary
-    - zip "jrnl-${CI_COMMIT_TAG}-linux.zip" build/jrnl
+    - zip "jrnl-${CI_COMMIT_TAG}-linux.zip"   build/jrnl
+    - zip "jrnl-${CI_COMMIT_TAG}-windows.zip" build-win/jrnl.exe
 
-    # Upload to GitLab Package Registry (generic packages)
+    # Upload Linux binary
     - |
       curl --fail --silent --show-error \
            --header "JOB-TOKEN: $CI_JOB_TOKEN" \
            --upload-file "jrnl-${CI_COMMIT_TAG}-linux.zip" \
            "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jrnl/${CI_COMMIT_TAG}/jrnl-${CI_COMMIT_TAG}-linux.zip"
 
-    # Create the GitLab Release entry
+    # Upload Windows binary
+    - |
+      curl --fail --silent --show-error \
+           --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+           --upload-file "jrnl-${CI_COMMIT_TAG}-windows.zip" \
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jrnl/${CI_COMMIT_TAG}/jrnl-${CI_COMMIT_TAG}-windows.zip"
+
+    # Create GitLab Release with links to both binaries
     - |
       curl --fail --silent --show-error \
            --request POST \
@@ -85,12 +134,18 @@ release:
            --data "{
              \"name\": \"jrnl. ${CI_COMMIT_TAG}\",
              \"tag_name\": \"${CI_COMMIT_TAG}\",
-             \"description\": \"## jrnl. ${CI_COMMIT_TAG}\n\n**Linux binary** is attached below.\n\n**macOS** — build locally and refer to the [README](README.md):\n\`\`\`\ncmake -B cmake-build-release -DCMAKE_BUILD_TYPE=Release\ncmake -B cmake-build-release -DCMAKE_BUILD_TYPE=Release\ncmake --build cmake-build-release --target jrnl\n\`\`\`\",
+             \"description\": \"## jrnl. ${CI_COMMIT_TAG}\n\nPre-built binaries for Linux and Windows are attached below.\n\n**macOS** — build locally, see [README](README.md).\",
              \"assets\": {
-               \"links\": [{
-                 \"name\": \"jrnl-${CI_COMMIT_TAG}-linux.zip\",
-                 \"url\": \"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jrnl/${CI_COMMIT_TAG}/jrnl-${CI_COMMIT_TAG}-linux.zip\"
-               }]
+               \"links\": [
+                 {
+                   \"name\": \"jrnl-${CI_COMMIT_TAG}-linux.zip\",
+                   \"url\": \"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jrnl/${CI_COMMIT_TAG}/jrnl-${CI_COMMIT_TAG}-linux.zip\"
+                 },
+                 {
+                   \"name\": \"jrnl-${CI_COMMIT_TAG}-windows.zip\",
+                   \"url\": \"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jrnl/${CI_COMMIT_TAG}/jrnl-${CI_COMMIT_TAG}-windows.zip\"
+                 }
+               ]
              }
            }" \
            "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
@@ -98,4 +153,5 @@ release:
     name: "jrnl-${CI_COMMIT_TAG}-release"
     paths:
       - "jrnl-${CI_COMMIT_TAG}-linux.zip"
+      - "jrnl-${CI_COMMIT_TAG}-windows.zip"
     expire_in: never
