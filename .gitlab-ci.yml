@@ -1,0 +1,91 @@
+########################################################################
+# jrnl. — GitLab CI/CD
+#
+# Pipeline stages
+#   build   → compile a Release .app on every push
+#   release → on a vX.Y.Z tag: zip the .app and publish a GitLab Release
+#
+# Requirements
+#   A GitLab Runner registered on a macOS host with the tag "macos".
+#   The runner must have CMake, Conan ≥ 2.0, and Python ≥ 3.8 available.
+#   Install via Homebrew: brew install cmake conan python
+########################################################################
+
+default:
+  tags:
+    - macos   # all jobs run on the macOS self-hosted runner
+
+stages:
+  - build
+  - release
+
+variables:
+  CONAN_HOME: "$CI_PROJECT_DIR/.conan2"   # cache Conan packages inside the project
+  BUILD_DIR:  "cmake-build-ci"
+
+# ── Cache ──────────────────────────────────────────────────────────────
+.conan_cache: &conan_cache
+  cache:
+    key: "conan-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .conan2/
+
+# ── Build ──────────────────────────────────────────────────────────────
+build:
+  stage: build
+  <<: *conan_cache
+  script:
+    # First cmake pass — Conan downloads deps and writes the toolchain,
+    # then exits with FATAL_ERROR asking for a second pass.
+    - cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release || true
+    # Second pass — toolchain now exists, full configure succeeds.
+    - cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
+    - cmake --build "$BUILD_DIR" --target jrnl --parallel
+  artifacts:
+    name: "jrnl-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - "$BUILD_DIR/jrnl.app"
+    expire_in: 1 week
+
+# ── Release (tags only) ────────────────────────────────────────────────
+release:
+  stage: release
+  needs: [build]
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+  script:
+    # Zip the .app so it can be downloaded as a single file
+    - cd "$BUILD_DIR"
+    - zip -r "../jrnl-$CI_COMMIT_TAG-macos.zip" jrnl.app
+    - cd ..
+
+    # Upload the zip to the GitLab Package Registry (generic packages)
+    - |
+      curl --fail --silent --show-error \
+           --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+           --upload-file "jrnl-$CI_COMMIT_TAG-macos.zip" \
+           "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/jrnl/$CI_COMMIT_TAG/jrnl-$CI_COMMIT_TAG-macos.zip"
+
+    # Create the GitLab Release entry
+    - |
+      curl --fail --silent --show-error \
+           --request POST \
+           --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+           --header "Content-Type: application/json" \
+           --data "{
+             \"name\": \"jrnl. $CI_COMMIT_TAG\",
+             \"tag_name\": \"$CI_COMMIT_TAG\",
+             \"description\": \"## jrnl. $CI_COMMIT_TAG\n\nDownload **jrnl-$CI_COMMIT_TAG-macos.zip**, unzip it, and drag \`jrnl.app\` to your Applications folder.\",
+             \"assets\": {
+               \"links\": [{
+                 \"name\": \"jrnl-$CI_COMMIT_TAG-macos.zip\",
+                 \"url\": \"$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/jrnl/$CI_COMMIT_TAG/jrnl-$CI_COMMIT_TAG-macos.zip\"
+               }]
+             }
+           }" \
+           "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases"
+  artifacts:
+    name: "jrnl-$CI_COMMIT_TAG-release"
+    paths:
+      - "jrnl-$CI_COMMIT_TAG-macos.zip"
+    expire_in: never

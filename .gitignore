@@ -1,0 +1,32 @@
+# CMake build directories (any preset / IDE name)
+cmake-build-*/
+build/
+out/
+
+# Conan local cache
+.conan2/
+.conan/
+
+# CLion / JetBrains
+.idea/
+cmake-build-debug/
+cmake-build-release/
+
+# CMake user presets (machine-specific)
+CMakeUserPresets.json
+
+# macOS
+.DS_Store
+
+# Generated files (re-created at build time)
+**/generated/
+
+# Frontend (Angular project kept for reference but build output excluded)
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Editor swap / backup files
+*.swp
+*.swo
+*~

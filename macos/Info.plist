@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>jrnl</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>jrnl</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>com.local.jrnl</string>
+
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>0.1</string>
+
+    <key>CFBundleExecutable</key>
+    <string>jrnl</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleSignature</key>
+    <string>????</string>
+
+    <!-- Allow WKWebView to work in a sandboxed/unsigned context -->
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <!-- No outbound network calls are made; this silences ATS warnings -->
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+    </dict>
+
+    <!-- Hide from Dock when backgrounded (optional – remove if you want Dock presence) -->
+    <key>LSUIElement</key>
+    <false/>
+</dict>
+</plist>
