@@ -93,6 +93,34 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_link_libraries(${PROJECT_NAME} PRIVATE webview::core)
 
+# ---------------------------------------------------------------------------
+# Windows — WebView2 SDK (Microsoft.Web.WebView2 NuGet package)
+# ---------------------------------------------------------------------------
+# Pass -DWEBVIEW2_SDK_DIR=<path> pointing at the extracted NuGet package root.
+# The CI downloads it automatically; for local builds install it via:
+#   winget install Microsoft.EdgeWebView2Runtime
+# and set the cache variable to the extracted package folder, or install via
+# NuGet and point WEBVIEW2_SDK_DIR at the result.
+# Falls back to the WEBVIEW2_SDK_DIR environment variable if the cache
+# variable is not set.
+if(WIN32)
+    if(NOT DEFINED WEBVIEW2_SDK_DIR AND DEFINED ENV{WEBVIEW2_SDK_DIR})
+        set(WEBVIEW2_SDK_DIR "$ENV{WEBVIEW2_SDK_DIR}" CACHE PATH
+            "Root of the extracted Microsoft.Web.WebView2 NuGet package")
+    endif()
+    if(WEBVIEW2_SDK_DIR)
+        message(STATUS "[webview2] SDK: ${WEBVIEW2_SDK_DIR}")
+        target_include_directories(${PROJECT_NAME} PRIVATE
+            "${WEBVIEW2_SDK_DIR}/build/native/include")
+        target_link_directories(${PROJECT_NAME} PRIVATE
+            "${WEBVIEW2_SDK_DIR}/build/native/x64")
+    else()
+        message(WARNING
+            "[webview2] WEBVIEW2_SDK_DIR not set — WebView2.h may not be found. "
+            "Pass -DWEBVIEW2_SDK_DIR=<NuGet package root> to CMake.")
+    endif()
+endif()
+
 if(APPLE)
     # Bundle the executable into a proper .app
     set_target_properties(${PROJECT_NAME} PROPERTIES

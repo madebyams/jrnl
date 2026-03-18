@@ -91,10 +91,9 @@ build:windows:
         Expand-Archive -Path webview2.zip -DestinationPath webview2_sdk -Force
         Remove-Item webview2.zip
       }
-    # Expose SDK headers and static-loader lib to MSVC via standard env vars.
-    - $env:INCLUDE = "$PWD\webview2_sdk\build\native\include;$env:INCLUDE"
-    - $env:LIB     = "$PWD\webview2_sdk\build\native\x64;$env:LIB"
-    - cmake -B build-win -DCMAKE_BUILD_TYPE=Release
+    # Pass the SDK root to CMake so it bakes the include/lib paths into the
+    # .vcxproj — MSBuild's internal vcvars reset cannot strip these out.
+    - cmake -B build-win -DCMAKE_BUILD_TYPE=Release "-DWEBVIEW2_SDK_DIR=$PWD\webview2_sdk"
     - cmake --build build-win --target jrnl --config Release
     # Normalise exe location: VS generator puts it in Release/, Ninja at root.
     # Copy to a fixed path so the release job can find it reliably.
