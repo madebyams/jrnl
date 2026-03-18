@@ -64,8 +64,8 @@ build:linux:
 # ── Windows build ──────────────────────────────────────────────────────
 # Prerequisites on the runner:
 #   - Visual Studio Build Tools (MSVC) with C++ workload
-#   - WebView2 SDK  (install via: winget install Microsoft.WebView2SDK)
 #   - CMake, Python 3, pip  (all on PATH)
+#   WebView2 SDK headers are fetched automatically from NuGet in CI.
 build:windows:
   stage: build
   tags:
@@ -74,6 +74,7 @@ build:windows:
     key: "conan-win-$CI_COMMIT_REF_SLUG"
     paths:
       - .conan2/
+      - webview2_sdk/
   before_script:
     - pip install --quiet conan
     - conan profile detect --force
@@ -81,6 +82,18 @@ build:windows:
     # Export recipe + pre-generate toolchain (same two-step as Linux)
     - conan export recipes/webview --version 0.12.0
     - conan install . --output-folder=build-win --build=missing -s build_type=Release -s compiler.cppstd=17
+    # Download the WebView2 SDK NuGet package (= zip) if not already cached.
+    # Provides WebView2.h (headers) and WebView2LoaderStatic.lib (linker).
+    - |
+      if (-not (Test-Path "webview2_sdk\build\native\include\WebView2.h")) {
+        Write-Host "Downloading Microsoft.Web.WebView2 SDK..."
+        Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.2651.64" -OutFile webview2.zip
+        Expand-Archive -Path webview2.zip -DestinationPath webview2_sdk -Force
+        Remove-Item webview2.zip
+      }
+    # Expose SDK headers and static-loader lib to MSVC via standard env vars.
+    - $env:INCLUDE = "$PWD\webview2_sdk\build\native\include;$env:INCLUDE"
+    - $env:LIB     = "$PWD\webview2_sdk\build\native\x64;$env:LIB"
     - cmake -B build-win -DCMAKE_BUILD_TYPE=Release
     - cmake --build build-win --target jrnl --config Release
     # Normalise exe location: VS generator puts it in Release/, Ninja at root.
