@@ -22,6 +22,7 @@ execute_process(
         --output-folder=${CMAKE_CURRENT_BINARY_DIR}
         --build=missing
         -s build_type=${CMAKE_BUILD_TYPE}
+        -s compiler.cppstd=17
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMAND_ERROR_IS_FATAL ANY
 )
