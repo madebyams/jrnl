@@ -1,0 +1,24 @@
+{
+  "name": "jrnl.",
+  "short_name": "jrnl.",
+  "description": "A quiet place to write.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#D9C6AF",
+  "theme_color": "#D9C6AF",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

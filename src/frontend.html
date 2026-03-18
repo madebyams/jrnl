@@ -2,12 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <!-- PWA — ignored when loaded via set_html() in the desktop app -->
+  <meta name="theme-color" content="#D9C6AF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="jrnl.">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon.svg">
+
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     html, body {
-      height: 100%; width: 100%;
+      height: 100dvh; /* dvh shrinks with the mobile keyboard; falls back to vh */
+      width: 100%;
       background: #D9C6AF;
       color: #000000;
       font-family: 'Courier New', monospace;
@@ -20,14 +30,19 @@
     ::-webkit-scrollbar-thumb:hover { background: #a08f76; }
 
     #app {
-      min-height: 100vh;
-      padding: 2rem;
+      height: 100dvh;
+      /* Respect notch / home-indicator safe areas on iOS */
+      padding: max(2rem, env(safe-area-inset-top))
+               max(2rem, env(safe-area-inset-right))
+               max(2rem, env(safe-area-inset-bottom))
+               max(2rem, env(safe-area-inset-left));
       display: flex;
       flex-direction: column;
     }
 
     #content {
       flex: 1;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       gap: 1rem;
@@ -47,6 +62,7 @@
 
     #editor-box {
       flex: 1;
+      min-height: 0;
       border: 1px solid #b8a38a;
       border-radius: 0.5rem;
       padding: 1rem;
@@ -57,6 +73,7 @@
 
     textarea {
       flex: 1;
+      min-height: 0;
       background: transparent;
       color: #000000;
       outline: none;
@@ -65,7 +82,10 @@
       font-size: 1rem;
       line-height: 1.5rem;
       border: none;
-      min-height: calc(100vh - 8rem);
+      overflow-y: auto;
+      /* Remove tap highlight and 300 ms delay on mobile */
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
   </style>
 </head>
@@ -80,13 +100,24 @@
   </div>
   <script>
     const editor = document.getElementById('editor');
+
     editor.addEventListener('keydown', function(e) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
         e.stopPropagation();
         editor.select();
       }
     });
+
     editor.focus();
+
+    // Register service worker for PWA offline support.
+    // Silently no-ops when loaded via set_html() in the desktop app
+    // (null origin — SW registration is rejected by the browser quietly).
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').catch(function() {});
+      });
+    }
   </script>
 </body>
 </html>

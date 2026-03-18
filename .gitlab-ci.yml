@@ -27,6 +27,7 @@ default:
 stages:
   - build
   - release
+  - deploy
 
 variables:
   CONAN_HOME: "$CI_PROJECT_DIR/.conan2"
@@ -105,6 +106,24 @@ build:windows:
     paths:
       - build-win/jrnl.exe
     expire_in: 1 week
+
+# ── GitLab Pages — PWA (main branch only) ─────────────────────────────
+# Publishes the frontend as a Progressive Web App via GitLab Pages.
+# Enable Pages for this project in GitLab → Settings → Pages.
+pages:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - mkdir -p public/icons
+    - cp src/frontend.html public/index.html
+    - cp pwa/manifest.json public/manifest.json
+    - cp pwa/sw.js        public/sw.js
+    - cp pwa/icons/icon.svg public/icons/icon.svg
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
 # ── Release (tag pushes only) ──────────────────────────────────────────
 release:

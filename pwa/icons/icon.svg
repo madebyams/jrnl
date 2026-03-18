@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#D9C6AF"/>
+  <text
+    x="50%" y="54%"
+    dominant-baseline="middle"
+    text-anchor="middle"
+    font-family="'Courier New', Courier, monospace"
+    font-size="172"
+    font-weight="bold"
+    letter-spacing="-10"
+    fill="#000000">jrnl.</text>
+</svg>
