@@ -71,5 +71,6 @@ class WebviewConan(ConanFile):
             # Requires system packages: libgtk-3-dev libwebkit2gtk-4.1-dev
             # (or libwebkit2gtk-4.0-dev on older distros)
             self.cpp_info.defines = ["WEBVIEW_GTK"]
-            # Flags are resolved by pkg-config at build time (see CMakeLists.txt)
-            self.cpp_info.set_property("cmake_find_mode", "none")
+            # GTK3 and WebKit2GTK are resolved via pkg-config in CMakeLists.txt.
+            # Do NOT set cmake_find_mode="none" here — that suppresses generation
+            # of webviewConfig.cmake and breaks find_package(webview) on Linux.
