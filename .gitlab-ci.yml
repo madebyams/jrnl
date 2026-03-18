@@ -3,21 +3,18 @@
 #
 # Platform note
 #   jrnl. uses WKWebView which is macOS-only. A macOS runner is required
-#   to produce a .app bundle. Because only Linux/Windows runners are
-#   available here, CI does the next best thing:
+#   to produce a .app bundle. Because only a Linux runner is available
+#   here, CI does the next best thing:
 #
-#   • build:linux   — Ubuntu 22.04 Docker container, WebKit2GTK
-#   • build:windows — native Windows shell runner (tag: win)
-#                     requires Visual Studio Build Tools + WebView2 SDK
+#   • build:linux — Ubuntu 22.04 Docker container, WebKit2GTK
 #
-#   Both jobs validate that the code compiles on their platform.
-#   The release stage publishes both binaries on a vX.Y.Z tag push.
+#   This validates that the code compiles on Linux.
+#   The release stage publishes the Linux binary on a vX.Y.Z tag push.
 #
 #   macOS .app builds must be done locally (see README — "Building").
 #
 # Runner tags
 #   amd64 — Linux shell/Docker runner
-#   win   — Windows shell runner
 ########################################################################
 
 default:
@@ -62,51 +59,6 @@ build:linux:
       - build/jrnl
     expire_in: 1 week
 
-# ── Windows build ──────────────────────────────────────────────────────
-# Prerequisites on the runner:
-#   - Visual Studio Build Tools (MSVC) with C++ workload
-#   - CMake, Python 3, pip  (all on PATH)
-#   WebView2 SDK headers are fetched automatically from NuGet in CI.
-build:windows:
-  stage: build
-  tags:
-    - win
-  cache:
-    key: "conan-win-$CI_COMMIT_REF_SLUG"
-    paths:
-      - .conan2/
-      - webview2_sdk/
-  before_script:
-    - pip install --quiet conan
-    - conan profile detect --force
-  script:
-    # Export recipe + pre-generate toolchain (same two-step as Linux)
-    - conan export recipes/webview --version 0.12.0
-    - conan install . --output-folder=build-win --build=missing -s build_type=Release -s compiler.cppstd=17
-    # Download the WebView2 SDK NuGet package (= zip) if not already cached.
-    # Provides WebView2.h (headers) and WebView2LoaderStatic.lib (linker).
-    - |
-      if (-not (Test-Path "webview2_sdk\build\native\include\WebView2.h")) {
-        Write-Host "Downloading Microsoft.Web.WebView2 SDK..."
-        Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.2651.64" -OutFile webview2.zip
-        Expand-Archive -Path webview2.zip -DestinationPath webview2_sdk -Force
-        Remove-Item webview2.zip
-      }
-    # Pass the SDK root to CMake so it bakes the include/lib paths into the
-    # .vcxproj — MSBuild's internal vcvars reset cannot strip these out.
-    - cmake -B build-win -DCMAKE_BUILD_TYPE=Release "-DWEBVIEW2_SDK_DIR=$PWD\webview2_sdk"
-    - cmake --build build-win --target jrnl --config Release
-    # Normalise exe location: VS generator puts it in Release/, Ninja at root.
-    # Copy to a fixed path so the release job can find it reliably.
-    - |
-      $exe = Get-ChildItem -Recurse -Filter jrnl.exe build-win | Select-Object -First 1
-      Copy-Item $exe.FullName build-win\jrnl.exe -Force
-  artifacts:
-    name: "jrnl-windows-$CI_COMMIT_SHORT_SHA"
-    paths:
-      - build-win/jrnl.exe
-    expire_in: 1 week
-
 # ── GitLab Pages — PWA (main branch only) ─────────────────────────────
 # Publishes the frontend as a Progressive Web App via GitLab Pages.
 # Enable Pages for this project in GitLab → Settings → Pages.
@@ -132,15 +84,12 @@ release:
   needs:
     - job: build:linux
       artifacts: true
-    - job: build:windows
-      artifacts: true
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
   before_script:
     - apt-get update -qq && apt-get install -y --no-install-recommends curl zip
   script:
-    - zip "jrnl-${CI_COMMIT_TAG}-linux.zip"   build/jrnl
-    - zip "jrnl-${CI_COMMIT_TAG}-windows.zip" build-win/jrnl.exe
+    - zip "jrnl-${CI_COMMIT_TAG}-linux.zip" build/jrnl
 
     # Upload Linux binary
     - |
@@ -149,14 +98,7 @@ release:
            --upload-file "jrnl-${CI_COMMIT_TAG}-linux.zip" \
            "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jrnl/${CI_COMMIT_TAG}/jrnl-${CI_COMMIT_TAG}-linux.zip"
 
-    # Upload Windows binary
-    - |
-      curl --fail --silent --show-error \
-           --header "JOB-TOKEN: $CI_JOB_TOKEN" \
-           --upload-file "jrnl-${CI_COMMIT_TAG}-windows.zip" \
-           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jrnl/${CI_COMMIT_TAG}/jrnl-${CI_COMMIT_TAG}-windows.zip"
-
-    # Create GitLab Release with links to both binaries
+    # Create GitLab Release with link to the Linux binary
     - |
       curl --fail --silent --show-error \
            --request POST \
@@ -165,16 +107,12 @@ release:
            --data "{
              \"name\": \"jrnl. ${CI_COMMIT_TAG}\",
              \"tag_name\": \"${CI_COMMIT_TAG}\",
-             \"description\": \"## jrnl. ${CI_COMMIT_TAG}\n\nPre-built binaries for Linux and Windows are attached below.\n\n**macOS** — build locally, see [README](README.md).\",
+             \"description\": \"## jrnl. ${CI_COMMIT_TAG}\n\nPre-built binary for Linux is attached below.\n\n**macOS** — build locally, see [README](README.md).\",
              \"assets\": {
                \"links\": [
                  {
                    \"name\": \"jrnl-${CI_COMMIT_TAG}-linux.zip\",
                    \"url\": \"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jrnl/${CI_COMMIT_TAG}/jrnl-${CI_COMMIT_TAG}-linux.zip\"
-                 },
-                 {
-                   \"name\": \"jrnl-${CI_COMMIT_TAG}-windows.zip\",
-                   \"url\": \"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/jrnl/${CI_COMMIT_TAG}/jrnl-${CI_COMMIT_TAG}-windows.zip\"
                  }
                ]
              }
@@ -184,5 +122,4 @@ release:
     name: "jrnl-${CI_COMMIT_TAG}-release"
     paths:
       - "jrnl-${CI_COMMIT_TAG}-linux.zip"
-      - "jrnl-${CI_COMMIT_TAG}-windows.zip"
     expire_in: never
