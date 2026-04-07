@@ -170,4 +170,4 @@ jrnl/
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+GPL Version 3 — see [LICENSE](LICENSE).
