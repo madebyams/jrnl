@@ -1,6 +1,6 @@
 # jrnl.
 
-A minimal, distraction-free journaling app for macOS.
+A minimal, distraction-free journaling app for macOS and Windows.
 No accounts. No cloud. No network calls. Your words never leave your machine.
 
 ---
@@ -25,6 +25,8 @@ jrnl. is a single-window desktop app built around a plain text area. Open it, wr
 
 ## Requirements
 
+### macOS
+
 | Tool | Version |
 |------|---------|
 | macOS | 13 Ventura or later |
@@ -39,7 +41,28 @@ Install missing tools with [Homebrew](https://brew.sh):
 brew install cmake conan python
 ```
 
+### Windows
+
+| Tool | Version |
+|------|---------|
+| Windows | 10 or later |
+| Visual Studio | 2022 (MSVC v143) |
+| CMake | ≥ 3.22 |
+| Conan | ≥ 2.0 |
+| Python | ≥ 3.8 |
+| WebView2 SDK | any recent |
+
+The WebView2 runtime ships with Windows 11 and recent Windows 10 updates. The SDK (headers + import lib) must be downloaded separately — the easiest way is via NuGet:
+
+```powershell
+nuget install Microsoft.Web.WebView2 -OutputDirectory C:\webview2-sdk
+```
+
+Then point CMake at the extracted folder with `-DWEBVIEW2_SDK_DIR` (see [Building — Windows](#windows-1) below).
+
 ## Building
+
+### macOS
 
 ```bash
 git clone git@git.anothersimplecoder.de:anotherSimpleCoder/jrnl.git
@@ -57,7 +80,36 @@ cmake --build cmake-build-release --target jrnl
 
 The result is `cmake-build-release/jrnl.app` — a fully self-contained, ad-hoc signed macOS app bundle.
 
+### Windows
+
+```powershell
+git clone git@git.anothersimplecoder.de:anotherSimpleCoder/jrnl.git
+cd jrnl
+
+# First configure — Conan downloads webview and generates the toolchain.
+# Point WEBVIEW2_SDK_DIR at your extracted NuGet package root.
+cmake -B cmake-build-release -DCMAKE_BUILD_TYPE=Release `
+      -DWEBVIEW2_SDK_DIR="C:\webview2-sdk\microsoft.web.webview2.<version>"
+
+# Second configure (needed once after Conan generates the toolchain)
+cmake -B cmake-build-release -DCMAKE_BUILD_TYPE=Release `
+      -DWEBVIEW2_SDK_DIR="C:\webview2-sdk\microsoft.web.webview2.<version>"
+
+# Build — note: --config Release is required with the Visual Studio generator
+cmake --build cmake-build-release --target jrnl --config Release
+```
+
+> **Note:** The `--config Release` flag is required when building on Windows.
+> Visual Studio is a multi-config generator and defaults to **Debug** when the
+> flag is omitted. Because Conan only installs the Release variant of the
+> webview package, the compiler would not find `webview/webview.h` in a Debug
+> build.
+
+The result is `cmake-build-release/Release/jrnl.exe`.
+
 ## Running
+
+### macOS
 
 Double-click `jrnl.app` in Finder, or:
 
@@ -71,11 +123,25 @@ To install system-wide:
 cp -r cmake-build-release/jrnl.app /Applications/
 ```
 
+### Windows
+
+```powershell
+.\cmake-build-release\Release\jrnl.exe
+```
+
 ## Keyboard shortcuts
+
+### macOS
 
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+A` | Select all text |
+
+### Windows
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+A` | Select all text |
 
 ## Project structure
 
@@ -98,7 +164,7 @@ jrnl/
 
 ## Tech stack
 
-- **[webview](https://github.com/webview/webview)** — thin cross-platform wrapper around WKWebView (macOS)
+- **[webview](https://github.com/webview/webview)** — thin cross-platform wrapper around WKWebView (macOS) / WebView2 (Windows)
 - **CMake + Conan** — build system and C++ package management
 - **Vanilla HTML/CSS/JS** — the entire UI in one file, zero framework overhead
 

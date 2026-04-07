@@ -39,6 +39,15 @@ include("${_toolchain}")
 # ---------------------------------------------------------------------------
 project(jrnl VERSION 0.1.0 LANGUAGES CXX)
 
+# For multi-config generators (Visual Studio, Ninja Multi-Config) Conan only
+# installs one build type, so restrict VS to that same type to avoid missing
+# include-dir generator expressions when building without --config.
+get_property(_isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(_isMultiConfig AND CMAKE_BUILD_TYPE)
+    set(CMAKE_CONFIGURATION_TYPES "${CMAKE_BUILD_TYPE}" CACHE STRING
+        "Build configurations (auto-set to match Conan build type)" FORCE)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
