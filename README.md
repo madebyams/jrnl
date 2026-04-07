@@ -1,6 +1,6 @@
 # jrnl.
 
-A minimal, distraction-free journaling app for macOS and Windows.
+A minimal, distraction-free journaling app for macOS, Windows, and Linux.
 No accounts. No cloud. No network calls. Your words never leave your machine.
 
 ---
@@ -41,6 +41,37 @@ Install missing tools with [Homebrew](https://brew.sh):
 brew install cmake conan python
 ```
 
+### Linux
+
+| Tool | Version |
+|------|---------|
+| Linux | any modern distro |
+| GCC or Clang | any recent |
+| CMake | ≥ 3.22 |
+| Conan | ≥ 2.0 |
+| Python | ≥ 3.8 |
+| pkg-config | any recent |
+| GTK3 | ≥ 3.0 |
+| WebKit2GTK | 4.0 or 4.1 |
+
+Install the required system libraries on Debian/Ubuntu:
+
+```bash
+sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+```
+
+Or for webkit2gtk 4.0 (older distros):
+
+```bash
+sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config
+```
+
+Install CMake and Conan via pip if not already present:
+
+```bash
+pip install conan cmake
+```
+
 ### Windows
 
 | Tool | Version |
@@ -61,6 +92,24 @@ nuget install Microsoft.Web.WebView2 -OutputDirectory C:\webview2-sdk
 Then point CMake at the extracted folder with `-DWEBVIEW2_SDK_DIR` (see [Building — Windows](#windows-1) below).
 
 ## Building
+
+### Linux
+
+```bash
+git clone git@git.anothersimplecoder.de:anotherSimpleCoder/jrnl.git
+cd jrnl
+
+# First configure (Conan downloads webview and generates the toolchain)
+cmake -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+
+# Second configure (needed once after Conan generates the toolchain)
+cmake -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+
+# Build
+cmake --build cmake-build-release --target jrnl
+```
+
+The result is `cmake-build-release/jrnl` — a standalone executable.
 
 ### macOS
 
@@ -109,6 +158,12 @@ The result is `cmake-build-release/Release/jrnl.exe`.
 
 ## Running
 
+### Linux
+
+```bash
+./cmake-build-release/jrnl
+```
+
 ### macOS
 
 Double-click `jrnl.app` in Finder, or:
@@ -130,6 +185,12 @@ cp -r cmake-build-release/jrnl.app /Applications/
 ```
 
 ## Keyboard shortcuts
+
+### Linux
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+A` | Select all text |
 
 ### macOS
 
@@ -164,7 +225,7 @@ jrnl/
 
 ## Tech stack
 
-- **[webview](https://github.com/webview/webview)** — thin cross-platform wrapper around WKWebView (macOS) / WebView2 (Windows)
+- **[webview](https://github.com/webview/webview)** — thin cross-platform wrapper around WKWebView (macOS) / WebView2 (Windows) / WebKit2GTK (Linux)
 - **CMake + Conan** — build system and C++ package management
 - **Vanilla HTML/CSS/JS** — the entire UI in one file, zero framework overhead
 
