@@ -18,7 +18,7 @@ sources:
 tasks:
   - build-linux: |
       cd "$HOME/jrnl"
-      python3 -m pip install --break-system-packages --user --quiet conan
+      python3 -m pip install --user --quiet conan
       export PATH="$HOME/.local/bin:$PATH"
       export CONAN_HOME="$HOME/.conan2"
       conan profile detect --force
