@@ -1,0 +1,82 @@
+name: CI
+
+# Converted from the former builds.sr.ht manifest (.build.yml).
+# Each sourcehut task is one step; $HOME is the workspace, as on sourcehut.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:jammy
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    defaults:
+      run:
+        shell: bash -xe {0}
+    steps:
+      - name: Install packages
+        run: |
+          apt-get update
+          apt-get install -y git ca-certificates \
+            build-essential \
+            cmake \
+            ninja-build \
+            python3 \
+            python3-pip \
+            pkg-config \
+            libgtk-3-dev \
+            libwebkit2gtk-4.0-dev \
+            libssl-dev \
+            curl \
+            zip \
+            git \
+            ca-certificates
+
+      - uses: actions/checkout@v4
+        with:
+          path: "jrnl"
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: "build-linux"
+        run: |
+          export HOME="$GITHUB_WORKSPACE"
+          cd "$HOME"
+          cd "$HOME/jrnl"
+          python3 -m pip install --user --quiet conan
+          export PATH="$HOME/.local/bin:$PATH"
+          export CONAN_HOME="$HOME/.conan2"
+          conan profile detect --force
+          conan export recipes/webview --version 0.12.0
+          conan install . --output-folder=build --build=missing -s build_type=Release
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build build --target jrnl --parallel
+          zip jrnl-linux.zip build/jrnl
+
+      - name: "build-pwa"
+        run: |
+          export HOME="$GITHUB_WORKSPACE"
+          cd "$HOME"
+          cd "$HOME/jrnl"
+          mkdir -p public/icons
+          cp src/frontend.html public/index.html
+          cp pwa/manifest.json public/manifest.json
+          cp pwa/sw.js public/sw.js
+          cp pwa/icons/icon.svg public/icons/icon.svg
+          tar -czf jrnl-pwa.tar.gz public
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: artifacts
+          if-no-files-found: warn
+          path: |
+            jrnl/jrnl-linux.zip
+            jrnl/jrnl-pwa.tar.gz
